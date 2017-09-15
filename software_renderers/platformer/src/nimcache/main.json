@@ -1,0 +1,19 @@
+{"compile":[
+["/home/vlad/Experiments/computer_graphics/software_renderers/src/nimcache/main.c", "gcc -c  -w -O3 -fno-strict-aliasing  -I/home/vlad/Nim/lib -o /home/vlad/Experiments/computer_graphics/software_renderers/src/nimcache/main.o /home/vlad/Experiments/computer_graphics/software_renderers/src/nimcache/main.c"],
+],
+"link":[
+"/home/vlad/Experiments/computer_graphics/software_renderers/src/nimcache/main.o",
+"/home/vlad/Experiments/computer_graphics/software_renderers/src/nimcache/stdlib_system.o",
+"/home/vlad/Experiments/computer_graphics/software_renderers/src/nimcache/stdlib_basic2d.o",
+"/home/vlad/Experiments/computer_graphics/software_renderers/src/nimcache/stdlib_math.o",
+"/home/vlad/Experiments/computer_graphics/software_renderers/src/nimcache/stdlib_strutils.o",
+"/home/vlad/Experiments/computer_graphics/software_renderers/src/nimcache/stdlib_parseutils.o",
+"/home/vlad/Experiments/computer_graphics/software_renderers/src/nimcache/stdlib_algorithm.o",
+"/home/vlad/Experiments/computer_graphics/software_renderers/src/nimcache/stdlib_times.o",
+"/home/vlad/Experiments/computer_graphics/software_renderers/src/nimcache/sdl2_sdl2.o",
+"/home/vlad/Experiments/computer_graphics/software_renderers/src/nimcache/stdlib_macros.o",
+"/home/vlad/Experiments/computer_graphics/software_renderers/src/nimcache/stdlib_unsigned.o",
+"/home/vlad/Experiments/computer_graphics/software_renderers/src/nimcache/sdl2_image.o"
+],
+"linkcmd": "gcc   -o /home/vlad/Experiments/computer_graphics/software_renderers/src/main  /home/vlad/Experiments/computer_graphics/software_renderers/src/nimcache/main.o /home/vlad/Experiments/computer_graphics/software_renderers/src/nimcache/stdlib_system.o /home/vlad/Experiments/computer_graphics/software_renderers/src/nimcache/stdlib_basic2d.o /home/vlad/Experiments/computer_graphics/software_renderers/src/nimcache/stdlib_math.o /home/vlad/Experiments/computer_graphics/software_renderers/src/nimcache/stdlib_strutils.o /home/vlad/Experiments/computer_graphics/software_renderers/src/nimcache/stdlib_parseutils.o /home/vlad/Experiments/computer_graphics/software_renderers/src/nimcache/stdlib_algorithm.o /home/vlad/Experiments/computer_graphics/software_renderers/src/nimcache/stdlib_times.o /home/vlad/Experiments/computer_graphics/software_renderers/src/nimcache/sdl2_sdl2.o /home/vlad/Experiments/computer_graphics/software_renderers/src/nimcache/stdlib_macros.o /home/vlad/Experiments/computer_graphics/software_renderers/src/nimcache/stdlib_unsigned.o /home/vlad/Experiments/computer_graphics/software_renderers/src/nimcache/sdl2_image.o  -lm   -ldl"
+}
