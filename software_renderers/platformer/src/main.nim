@@ -2,6 +2,8 @@ import basic2d
 import strutils
 import times
 import math
+import streams
+import os
 
 import sdl2
 import sdl2.image
@@ -17,6 +19,7 @@ const
   air = 0
   start = 78
   finish = 110
+  dataDir = "data"
 
 
 
@@ -24,7 +27,16 @@ type
   SDLException = object of Exception
 
   Input {.pure.} = enum none, left, right, jump, restart, quit
+
   Collision {.pure.} = enum x, y, corner
+
+  CacheLine = object
+    texture: TexturePtr
+    w, h: cint
+
+  TextCache = ref object
+    text: string
+    cache: array[2, CacheLine]
 
   Time = ref object
     begin, finish, best: int
@@ -54,39 +66,84 @@ template sdlFailIf(cond: typed, reason: string) =
     reason & ", SDL error: " & $getError())
 
 
+when defined(embedData):
+  template readRW(filename: string): ptr RWops =
+    const file = staticRead(dataDir / filename)
+    rwFromConstMem(file.cstring, file.len)
+
+
+  template readStream(filename: string): Stream =
+    const file = staticRead(dataDir / filename)
+    newStringStream(file)
+else:
+    let fullDataDir = getAppDir() / dataDir
+
+    template readRW(filename: string): ptr RWops =
+      var rw = rwFromFile(cstring(fullDataDir / filename), "r")
+      sdlFailIf rw.isNil: "Cannot create RWops from file"
+      rw
+
+    template readStream(filename: string): Stream =
+      var stream = newFileStream(fullDataDir / filename)
+      if stream.isNil: raise ValueError.newException("Cannot open file stream: " & fullDataDir / filename)
+      stream
+
+
+
 proc formatTime(ticks: int): string =
   let
     mins = (ticks div 50) div 60
     secs = (ticks div 50) mod 60
-    cents = (ticks mod 50) * 2
+  interp"${mins:02}:${secs:02}"
 
-  interp"${mins:02}:${secs:02}:${cents:02}"
+
+proc formatTimeExact(ticks: int): string =
+  let
+    cents = (ticks mod 50) * 2
+  interp"${formatTime(ticks)}:${cents:02}"
+
+
+proc newTextCache: TextCache =
+  new result
 
 
 proc renderText(renderer: RendererPtr, font: FontPtr,
-                text: string, x, y: cint, color: Color) =
-  let surface = font.renderUtf8Solid(text.cstring, color)
+                text: string, x, y, outline: cint, color: Color): CacheLine =
+
+  font.setFontOutline(outline)
+  let surface = font.renderUtf8Blended(text.cstring, color)
   sdlFailIf surface.isNil: "Could not render text surface"
 
   discard surface.setSurfaceAlphaMod(color.a)
 
-  var
-    source = rect(0, 0, surface.w, surface.h)
-    dest = rect(x, y, surface.w, surface.h)
+  result.w = surface.w
+  result.h = surface.h
 
-  let texture = renderer.createTextureFromSurface(surface)
-  sdlFailIf texture.isNil:
-    "Could not create texture from rendered text"
+  result.texture = renderer.createTextureFromSurface(surface)
+  sdlFailIf result.texture.isNil: "Could not create texture from rendered text"
 
   surface.freeSurface()
-  renderer.copyEx(texture, source, dest, angle = 0.0, center = nil, flip = SDL_FLIP_NONE)
-
-  texture.destroy()
 
 
-proc renderText(game: Game, text: string, x, y: cint, color: Color) =
-  const outlineColor = color(0, 0, 0, 64)
-  game.renderer.renderText(game.font, text, x, y, color)
+proc renderText(game: Game, text: string, x, y: cint, color: Color, tc: TextCache) =
+  let passes = [(color: color(0, 0, 0, 64), outline:2.cint),
+                (color: color, outline: 0.cint)]
+  if text != tc.text:
+    for i in 0 .. 1:
+      tc.cache[i].texture.destroy()
+      tc.cache[i] = game.renderer.renderText(game.font, text, x, y, passes[i].outline, passes[i].color)
+    tc.text = text
+
+  for i in 0 .. 1:
+    var source = rect(0, 0, tc.cache[i].w, tc.cache[i].h)
+    var dest = rect(x - passes[i].outline, y - passes[i].outline, tc.cache[i].w, tc.cache[i].h)
+    game.renderer.copyEx(tc.cache[i].texture, source, dest, angle = 0.0, center = nil)
+
+
+template renderTextCached(game: Game, text: string, x, y: cint, color: Color) =
+  block:
+    var tc {.global.} = newTextCache()
+    game.renderText(text, x, y, color, tc)
 
 
 proc toInput(key: Scancode): Input =
@@ -276,11 +333,11 @@ proc render(game: Game, tick: int) =
   let time = game.player.time
   const white = color(255, 255, 255, 255)
   if time.begin >= 0:
-    game.renderText(formatTime(tick - time.begin), 50, 100, white)
+    game.renderTextCached(formatTime(tick - time.begin), 50, 100, white)
   elif time.finish >= 0:
-    game.renderText("Finished in: " & formatTime(time.finish), 50, 100, white)
+    game.renderTextCached("Finished in: " & formatTimeExact(time.finish), 50, 100, white)
   if time.best >= 0:
-    game.renderText("Best time: " & formatTime(time.best), 50, 150, white)
+    game.renderTextCached("Best time: " & formatTimeExact(time.best), 50, 150, white)
   # Show the result on screen
   game.renderer.present()
 
@@ -308,26 +365,27 @@ proc physics(game: Game) =
   game.map.moveBox(game.player.pos, game.player.vel, playerSize)
 
 
-proc newMap(texture: TexturePtr, file: string): Map =
+proc newMap(texture: TexturePtr, map: Stream): Map =
   new result
   result.texture = texture
   result.tiles = @[]
 
 
-  for line in file.lines:
+  var line = ""
+  while map.readLine(line):
     var width = 0
     for word in line.split(' '):
       if word == "": continue
       let value = parseUInt(word)
       if value > uint(uint8.high):
         raise ValueError.newException(
-          "Invalid value " & word & " in map " & file)
+          "Invalid value " & word & " in map ")
       result.tiles.add value.uint8
       inc width
 
     if result.width > 0 and result.width != width:
       raise ValueError.newException(
-        "Incompatible line length in map " & file)
+        "Incompatible line length in map ")
     result.width = width
     inc result.height
 
@@ -342,12 +400,16 @@ proc newPlayer(texture: TexturePtr): Player =
 proc newGame(renderer: RendererPtr): Game =
   new result
   result.renderer = renderer
-  result.player = newPlayer(renderer.loadTexture("player.png"))
-  result.map = newMap(renderer.loadTexture("grass.png"), "default.map")
 
   result.font = openFontRW(
-    readRW("DejaVuSans.ttf", freesrc = 1, 28))
+    readRW("DejaVuSans.ttf"), freesrc = 1, 28)
   sdlFailIf result.font.isNil: "Failed to load font"
+
+  result.player = newPlayer(renderer.loadTexture_RW(
+    readRW("player.png"), freesrc = 1))
+  result.map = newMap(renderer.loadTexture_RW(
+                      readRW("grass.png"), freesrc = 1),
+                      readStream("default.map"))
 
 
 proc main =
@@ -400,6 +462,7 @@ proc main =
       game.logic(lastTick)
 
     lastTick = newTick
-    game.render()
+    game.render(lastTick)
+
 
 main()
